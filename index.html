@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Email Triage GPT</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">AI Workflow Automation</p>
+          <h1>AI Email Triage GPT</h1>
+          <p class="intro">
+            Paste an email and get real GPT output: priority, category, deadlines,
+            action items, and a suggested reply.
+          </p>
+        </div>
+        <div class="model-badge" id="modelBadge">gpt-4o-mini</div>
+      </section>
+
+      <section class="workspace">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Email Input</h2>
+            <button id="sampleButton" type="button">Load Sample</button>
+          </div>
+          <textarea id="emailInput" spellcheck="false" placeholder="Paste an email here..."></textarea>
+          <button id="analyzeButton" class="primary" type="button">Analyze Email</button>
+        </article>
+
+        <article class="panel results">
+          <div class="panel-title">
+            <h2>GPT Result</h2>
+            <span id="modeBadge">Waiting</span>
+          </div>
+
+          <div class="metrics">
+            <div>
+              <span>Priority</span>
+              <strong id="priority">-</strong>
+            </div>
+            <div>
+              <span>Category</span>
+              <strong id="category">-</strong>
+            </div>
+          </div>
+
+          <section class="result-block">
+            <h3>Summary</h3>
+            <p id="summary">Result will appear here.</p>
+          </section>
+
+          <section class="result-block">
+            <h3>Deadlines</h3>
+            <ul id="deadlines"></ul>
+          </section>
+
+          <section class="result-block">
+            <h3>Action Items</h3>
+            <ul id="actionItems"></ul>
+          </section>
+
+          <section class="result-block">
+            <h3>Suggested Reply</h3>
+            <p id="reply">Suggested reply will appear here.</p>
+          </section>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
