@@ -19,6 +19,29 @@
         <div class="model-badge" id="modelBadge">gpt-4o-mini</div>
       </section>
 
+      <section class="auth-panel" id="authPanel">
+        <div>
+          <h2>Login</h2>
+          <p>Use your demo account to get a JWT token before analyzing emails.</p>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label>
+            Username
+            <input id="usernameInput" name="username" autocomplete="username" value="demo" />
+          </label>
+          <label>
+            Password
+            <input id="passwordInput" name="password" type="password" autocomplete="current-password" value="demo123" />
+          </label>
+          <button type="submit">Login</button>
+        </form>
+      </section>
+
+      <section class="session-bar hidden" id="sessionBar">
+        <span id="sessionText">Logged in</span>
+        <button id="logoutButton" type="button">Logout</button>
+      </section>
+
       <section class="workspace">
         <article class="panel">
           <div class="panel-title">

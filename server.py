@@ -1,5 +1,9 @@
 import json
 import os
+import base64
+import hashlib
+import hmac
+import time
 import urllib.error
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -9,6 +13,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 HOST = "127.0.0.1"
 PORT = 8001
+TOKEN_TTL_SECONDS = 60 * 60
 
 
 def load_env_file():
@@ -51,6 +56,71 @@ Rules:
 - Action items must be practical and business-focused.
 - Suggested reply must be concise and professional.
 """
+
+
+def base64url_encode(value):
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("utf-8")
+
+
+def base64url_decode(value):
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def get_jwt_secret():
+    return os.getenv("JWT_SECRET", "dev-secret-change-me")
+
+
+def create_jwt(username):
+    now = int(time.time())
+    header = {
+        "alg": "HS256",
+        "typ": "JWT",
+    }
+    payload = {
+        "sub": username,
+        "iat": now,
+        "exp": now + TOKEN_TTL_SECONDS,
+    }
+
+    encoded_header = base64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    encoded_payload = base64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
+    signature = hmac.new(get_jwt_secret().encode("utf-8"), signing_input, hashlib.sha256).digest()
+    return f"{encoded_header}.{encoded_payload}.{base64url_encode(signature)}"
+
+
+def verify_jwt(token):
+    try:
+        encoded_header, encoded_payload, encoded_signature = token.split(".")
+    except ValueError:
+        raise ValueError("Invalid token format.")
+
+    signing_input = f"{encoded_header}.{encoded_payload}".encode("utf-8")
+    expected_signature = hmac.new(get_jwt_secret().encode("utf-8"), signing_input, hashlib.sha256).digest()
+    received_signature = base64url_decode(encoded_signature)
+
+    if not hmac.compare_digest(expected_signature, received_signature):
+        raise ValueError("Invalid token signature.")
+
+    payload = json.loads(base64url_decode(encoded_payload))
+    if int(time.time()) >= int(payload.get("exp", 0)):
+        raise ValueError("Token expired. Please log in again.")
+
+    return payload
+
+
+def read_json_body(handler):
+    content_length = int(handler.headers.get("Content-Length", 0))
+    body = handler.rfile.read(content_length).decode("utf-8")
+    return json.loads(body or "{}")
+
+
+def get_bearer_token(headers):
+    auth_header = headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise ValueError("Missing Authorization bearer token.")
+    return auth_header.removeprefix("Bearer ").strip()
 
 
 def extract_output_text(response_data):
@@ -127,15 +197,46 @@ Email:
 
 class EmailTriageHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
-        if self.path != "/api/analyze":
-            self.send_error(404, "Not found")
+        if self.path == "/api/login":
+            self.handle_login()
             return
 
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length).decode("utf-8")
+        if self.path == "/api/analyze":
+            self.handle_analyze()
+            return
+
+        self.send_error(404, "Not found")
+
+    def handle_login(self):
+        try:
+            payload = read_json_body(self)
+            username = payload.get("username", "").strip()
+            password = payload.get("password", "")
+            expected_username = os.getenv("AUTH_USERNAME", "demo")
+            expected_password = os.getenv("AUTH_PASSWORD", "demo123")
+
+            if not hmac.compare_digest(username, expected_username) or not hmac.compare_digest(password, expected_password):
+                self.send_json({"error": "Invalid username or password."}, status=401)
+                return
+
+            self.send_json({
+                "token": create_jwt(username),
+                "username": username,
+                "expires_in": TOKEN_TTL_SECONDS,
+            })
+        except Exception as exc:
+            self.send_json({"error": str(exc)}, status=500)
+
+    def handle_analyze(self):
+        try:
+            token = get_bearer_token(self.headers)
+            verify_jwt(token)
+        except Exception as exc:
+            self.send_json({"error": str(exc)}, status=401)
+            return
 
         try:
-            payload = json.loads(body)
+            payload = read_json_body(self)
             email_text = payload.get("email", "").strip()
             if not email_text:
                 raise ValueError("Email content is empty.")
@@ -145,6 +246,24 @@ class EmailTriageHandler(SimpleHTTPRequestHandler):
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=500)
 
+    def do_GET(self):
+        if self.path == "/api/me":
+            try:
+                token = get_bearer_token(self.headers)
+                payload = verify_jwt(token)
+                self.send_json({"username": payload.get("sub"), "expires_at": payload.get("exp")})
+            except Exception as exc:
+                self.send_json({"error": str(exc)}, status=401)
+            return
+
+        return super().do_GET()
+
+    def send_error(self, code, message=None, explain=None):
+        if self.path.startswith("/api/"):
+            self.send_json({"error": message or "Request failed."}, status=code)
+            return
+        super().send_error(code, message, explain)
+
     def send_json(self, payload, status=200):
         response_body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -153,10 +272,16 @@ class EmailTriageHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response_body)
 
+    def log_message(self, format, *args):
+        if self.path.startswith("/api/"):
+            return
+        super().log_message(format, *args)
+
 
 def main():
     load_env_file()
     print(f"Using model: {os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}")
+    print(f"Auth username: {os.getenv('AUTH_USERNAME', 'demo')}")
     server = ThreadingHTTPServer((HOST, PORT), EmailTriageHandler)
     print(f"AI Email Triage GPT running at http://{HOST}:{PORT}")
     print("Press Ctrl+C to stop.")

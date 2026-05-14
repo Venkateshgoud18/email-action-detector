@@ -80,6 +80,69 @@ h1 {
   font-weight: 800;
 }
 
+.auth-panel,
+.session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.auth-panel p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.login-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+input {
+  min-height: 40px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--ink);
+  font: inherit;
+}
+
+.login-form button,
+#logoutButton {
+  padding: 0 16px;
+  background: var(--ink);
+  color: white;
+}
+
+.session-bar {
+  min-height: 58px;
+  color: var(--green);
+  font-weight: 800;
+}
+
+.hidden {
+  display: none;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 0.95fr 1.05fr;
@@ -213,6 +276,7 @@ li {
 
 @media (max-width: 860px) {
   .hero,
+  .auth-panel,
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -224,5 +288,15 @@ li {
 
   h1 {
     font-size: 34px;
+  }
+
+  .auth-panel,
+  .session-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .login-form {
+    grid-template-columns: 1fr;
   }
 }

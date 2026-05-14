@@ -22,11 +22,17 @@ for line in env_path.read_text(encoding="utf-8").splitlines():
 
 api_key = keys.get("OPENAI_API_KEY", "")
 model = keys.get("OPENAI_MODEL", "")
+jwt_secret = keys.get("JWT_SECRET", "")
+auth_username = keys.get("AUTH_USERNAME", "")
+auth_password = keys.get("AUTH_PASSWORD", "")
 
 print(f"OPENAI_API_KEY present: {bool(api_key)}")
 print(f"OPENAI_API_KEY starts with sk-: {api_key.startswith('sk-')}")
 print(f"OPENAI_API_KEY length: {len(api_key)}")
 print(f"OPENAI_MODEL: {model or 'not set'}")
+print(f"JWT_SECRET present: {bool(jwt_secret)}")
+print(f"AUTH_USERNAME: {auth_username or 'not set'}")
+print(f"AUTH_PASSWORD present: {bool(auth_password)}")
 
 if not api_key or api_key == "your_new_api_key_here":
     print("Fix .env: replace the placeholder with your actual key.")
