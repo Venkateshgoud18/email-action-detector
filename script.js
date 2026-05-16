@@ -2,8 +2,10 @@ const emailInput = document.querySelector("#emailInput");
 const analyzeButton = document.querySelector("#analyzeButton");
 const sampleButton = document.querySelector("#sampleButton");
 const loginForm = document.querySelector("#loginForm");
+const registerBtn = document.querySelector("#registerBtn");
 const authPanel = document.querySelector("#authPanel");
 const sessionBar = document.querySelector("#sessionBar");
+const workspace = document.querySelector(".workspace");
 const sessionText = document.querySelector("#sessionText");
 const logoutButton = document.querySelector("#logoutButton");
 const usernameInput = document.querySelector("#usernameInput");
@@ -96,6 +98,7 @@ function renderSession() {
 
   authPanel.classList.toggle("hidden", isLoggedIn);
   sessionBar.classList.toggle("hidden", !isLoggedIn);
+  workspace.classList.toggle("hidden", !isLoggedIn);
   analyzeButton.disabled = !isLoggedIn;
   sessionText.textContent = isLoggedIn ? `Logged in as ${username}` : "Not logged in";
 
@@ -127,6 +130,35 @@ async function login(event) {
 
     setSession(result.token, result.username);
     modeBadge.textContent = "Authenticated";
+  } catch (error) {
+    clearSession();
+    renderError(error.message);
+  }
+}
+
+async function register(event) {
+  event.preventDefault();
+  modeBadge.textContent = "Registering";
+
+  try {
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: usernameInput.value.trim(),
+        password: passwordInput.value,
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      throw new Error(result.error || "Registration failed.");
+    }
+
+    setSession(result.token, result.username);
+    modeBadge.textContent = "Registered & Authenticated";
   } catch (error) {
     clearSession();
     renderError(error.message);
@@ -183,6 +215,7 @@ sampleButton.addEventListener("click", () => {
 });
 
 loginForm.addEventListener("submit", login);
+registerBtn.addEventListener("click", register);
 logoutButton.addEventListener("click", clearSession);
 analyzeButton.addEventListener("click", analyzeEmail);
 

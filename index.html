@@ -21,19 +21,22 @@
 
       <section class="auth-panel" id="authPanel">
         <div>
-          <h2>Login</h2>
-          <p>Use your demo account to get a JWT token before analyzing emails.</p>
+          <h2>Authentication</h2>
+          <p>Login or Register to get a JWT token before analyzing emails.</p>
         </div>
         <form id="loginForm" class="login-form">
           <label>
             Username
-            <input id="usernameInput" name="username" autocomplete="username" value="demo" />
+            <input id="usernameInput" name="username" autocomplete="username" value="" placeholder="demo" />
           </label>
           <label>
             Password
-            <input id="passwordInput" name="password" type="password" autocomplete="current-password" value="demo123" />
+            <input id="passwordInput" name="password" type="password" autocomplete="current-password" value="" placeholder="demo123" />
           </label>
-          <button type="submit">Login</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="submit" id="loginBtn">Login</button>
+            <button type="button" id="registerBtn" style="background: var(--surface); color: var(--ink); border: 1px solid var(--line);">Sign Up</button>
+          </div>
         </form>
       </section>
 

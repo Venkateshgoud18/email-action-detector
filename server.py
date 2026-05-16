@@ -8,12 +8,27 @@ import urllib.error
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from ai_models import get_ai_model
 
 
 BASE_DIR = Path(__file__).resolve().parent
 HOST = "127.0.0.1"
 PORT = 8001
 TOKEN_TTL_SECONDS = 60 * 60
+USERS_FILE = BASE_DIR / "users.json"
+
+def get_users():
+    if not USERS_FILE.exists():
+        expected_username = os.getenv("AUTH_USERNAME", "demo")
+        expected_password = os.getenv("AUTH_PASSWORD", "demo123")
+        hashed_password = hashlib.sha256(expected_password.encode()).hexdigest()
+        users = {expected_username: hashed_password}
+        USERS_FILE.write_text(json.dumps(users))
+        return users
+    return json.loads(USERS_FILE.read_text())
+
+def save_users(users):
+    USERS_FILE.write_text(json.dumps(users, indent=2))
 
 
 def load_env_file():
@@ -123,82 +138,21 @@ def get_bearer_token(headers):
     return auth_header.removeprefix("Bearer ").strip()
 
 
-def extract_output_text(response_data):
-    if response_data.get("output_text"):
-        return response_data["output_text"]
-
-    for item in response_data.get("output", []):
-        if item.get("type") != "message":
-            continue
-        for content in item.get("content", []):
-            if content.get("type") == "output_text":
-                return content.get("text", "")
-
-    return ""
-
-
-def analyze_with_openai(email_text):
-    api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env and restart the server.")
-
-    model_input = f"""
-Return the analysis as JSON.
-
-Email:
-{email_text}
-"""
-
-    payload = {
-        "model": model,
-        "instructions": SYSTEM_INSTRUCTIONS,
-        "input": model_input,
-        "text": {
-            "format": {
-                "type": "json_object"
-            }
-        },
-    }
-
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/responses",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"OpenAI API error {exc.code}: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Network error while calling OpenAI: {exc}") from exc
-
-    output_text = extract_output_text(response_data)
-    if not output_text:
-        raise RuntimeError("OpenAI returned no output text.")
-
-    try:
-        result = json.loads(output_text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"OpenAI returned invalid JSON: {output_text}") from exc
-
-    result["mode"] = "OpenAI GPT"
-    result["model"] = model
-    return result
+def get_bearer_token(headers):
+    auth_header = headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise ValueError("Missing Authorization bearer token.")
+    return auth_header.removeprefix("Bearer ").strip()
 
 
 class EmailTriageHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/login":
             self.handle_login()
+            return
+            
+        if self.path == "/api/register":
+            self.handle_register()
             return
 
         if self.path == "/api/analyze":
@@ -212,12 +166,40 @@ class EmailTriageHandler(SimpleHTTPRequestHandler):
             payload = read_json_body(self)
             username = payload.get("username", "").strip()
             password = payload.get("password", "")
-            expected_username = os.getenv("AUTH_USERNAME", "demo")
-            expected_password = os.getenv("AUTH_PASSWORD", "demo123")
+            
+            users = get_users()
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
 
-            if not hmac.compare_digest(username, expected_username) or not hmac.compare_digest(password, expected_password):
+            if username not in users or not hmac.compare_digest(users[username], hashed_password):
                 self.send_json({"error": "Invalid username or password."}, status=401)
                 return
+
+            self.send_json({
+                "token": create_jwt(username),
+                "username": username,
+                "expires_in": TOKEN_TTL_SECONDS,
+            })
+        except Exception as exc:
+            self.send_json({"error": str(exc)}, status=500)
+
+    def handle_register(self):
+        try:
+            payload = read_json_body(self)
+            username = payload.get("username", "").strip()
+            password = payload.get("password", "")
+
+            if not username or not password:
+                self.send_json({"error": "Username and password are required."}, status=400)
+                return
+
+            users = get_users()
+            if username in users:
+                self.send_json({"error": "Username already exists."}, status=400)
+                return
+
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+            users[username] = hashed_password
+            save_users(users)
 
             self.send_json({
                 "token": create_jwt(username),
@@ -241,7 +223,8 @@ class EmailTriageHandler(SimpleHTTPRequestHandler):
             if not email_text:
                 raise ValueError("Email content is empty.")
 
-            result = analyze_with_openai(email_text)
+            ai_model = get_ai_model()
+            result = ai_model.analyze_email(email_text, SYSTEM_INSTRUCTIONS)
             self.send_json(result)
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=500)
